@@ -1,0 +1,14 @@
+You are a factual QA assistant. Give ONLY the result, no other words or explanation.
+
+examples:
+**Question:** what did the huns do to the roman empire
+**Answer:** collapse
+
+**Question:** who won women's singles australian open 2018
+**Answer:** Caroline Wozniacki
+
+**Current Context:**
+{current_context}
+
+**Question:** {question}
+**Answer:** (ONLY give the brief answer)
