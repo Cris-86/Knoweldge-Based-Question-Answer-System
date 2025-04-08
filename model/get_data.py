@@ -26,20 +26,17 @@ def preprocess_document(text):
     Returns:
         list: A list of preprocessed tokens.
     """
-    # Remove HTML tags and decode HTML entities
     text = html.unescape(text)
     soup = BeautifulSoup(text, "html.parser")
     text = soup.get_text(separator=" ")  
 
     text = re.sub(r"\{\{[^}]+\}\}", "", text)
     text = re.sub(r"\[[^\]]+\]", "", text)
-    text = re.sub(r"[^a-zA-Z0-9\s]", "", text)  # Remove non-alphanumeric characters
+    text = re.sub(r"[^a-zA-Z0-9\s]", "", text)
     text = re.sub(r"\s+", " ", text).strip()
 
-    # tokenize the text
     tokens = word_tokenize(text.lower())
 
-    # remove punctuation and stopwords
     stop_words = set(stopwords.words('english'))
     tokens = [word for word in tokens if word not in stop_words and word not in string.punctuation]
     
@@ -62,10 +59,22 @@ def preprocess_text(text):
 
     text = re.sub(r"\{\{[^}]+\}\}", "", text)
     text = re.sub(r"\[[^\]]+\]", "", text)
-    text = re.sub(r"[^a-zA-Z0-9\s]", "", text)  # Remove non-alphanumeric characters
+    text = re.sub(r"[^a-zA-Z0-9\s]", "", text)
     text = re.sub(r"\s+", " ", text).strip()
 
     return text
+
+def get_processed_path(file_path):
+    """
+    Get the path for the processed file.
+    
+    Args:
+        file_path (str): Path to the original file.
+        
+    Returns:
+        str: Path to the processed file.
+    """
+    return os.path.join(os.path.dirname(file_path), 'processed_' + os.path.basename(file_path))
 
 def load_documents(file_path='./data/documents.jsonl'):
     """
@@ -80,7 +89,7 @@ def load_documents(file_path='./data/documents.jsonl'):
     """
     documents = {}
     tokenized_docs = []
-    if not os.path.exists(os.path.join(os.path.dirname(file_path), 'processed_documents.jsonl')):
+    if not os.path.exists(get_processed_path(file_path)):
         with open(file_path, 'r', encoding='utf-8') as f:
             for line in tqdm.tqdm(f, desc="Loading documents"):
                 if line.strip():
@@ -90,7 +99,7 @@ def load_documents(file_path='./data/documents.jsonl'):
                     document['document_text'] = preprocess_document(document['document_text'])
                     documents[doc_id] = document['document_text']
                     tokenized_docs.append(tokens)
-        save_path = os.path.join(os.path.dirname(file_path), 'processed_documents.jsonl')
+        save_path = get_processed_path(file_path)
         with open(save_path, 'w', encoding='utf-8') as f:
             for doc in documents:
                 f.write(json.dumps(doc) + '\n')
@@ -121,9 +130,10 @@ def load_datasets(file_path='./data/train.jsonl'):
         for line in tqdm.tqdm(f, desc="Loading datasets"):
             if line.strip():
                 data = json.loads(line)
-                question = preprocess_text(data['question'])
+                tokenized_question = preprocess_document(data['question'])
                 datasets.append({
-                    'question': question,
+                    'question': data['question'],
+                    'tokenized_question': tokenized_question,
                     'answer': data['answer'],
                     'document_id': data['document_id']
                 })

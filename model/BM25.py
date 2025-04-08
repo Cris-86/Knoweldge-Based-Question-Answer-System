@@ -11,7 +11,14 @@ class BM25_KBQA:
     def __init__(self, file_path='./data/documents.jsonl', top_k=5, refine_model=False, use_wandb=False):
         self.top_k = top_k
         self.knowledge_base = []
-        self.documents, self.tokenized_docs, self.documentsLen = get_data.load_documents(file_path)
+        name = self.get_file_name(file_path)
+        if name == 'documents':
+            self.documents, self.tokenized_docs, self.documentsLen = get_data.load_documents(file_path)
+        else:
+            # need refine
+            data, len_data = get_data.load_datasets(file_path)
+            self.documents = data['question']
+            self.tokenized_docs = data['tokenized_question']
         self.refine_model = refine_model
         self.use_wandb = use_wandb
         if self.refine_model:
@@ -30,6 +37,11 @@ class BM25_KBQA:
         else:
             self.bm25 = BM25Okapi(self.tokenized_docs, k1=2.4, b=0.9)
     
+    def get_file_name(self, file_path):
+        file_name_with_extension = os.path.basename(file_path)
+        documents = os.path.splitext(file_name_with_extension)[0]
+        return documents
+
     def get_wandb_api_key(self, file_path='wandbKey'):
         if os.path.exists(file_path):
             with open(file_path, 'r') as f:
@@ -38,19 +50,19 @@ class BM25_KBQA:
             raise FileNotFoundError(f"Credentials file '{file_path}' not found.")
 
     def retrieve_single_question(self, question):
-        tokenized_question = get_data.preprocess_text(question)
+        tokenized_question = get_data.preprocess_document(question)
         scores = self.bm25.get_scores(tokenized_question)
         top_indices = sorted(range(len(scores)), key=lambda i: -scores[i])[:self.top_k]
         best_matches = [self.documents[i] for i in top_indices]
         return top_indices,  best_matches
 
-    def retrieve_datasets(self, question):
-        scores = self.bm25.get_scores(question)
+    def retrieve_datasets(self, tokenized_question):
+        scores = self.bm25.get_scores(tokenized_question)
         top_indices = sorted(range(len(scores)), key=lambda i: -scores[i])[:self.top_k]
         best_matches = [self.documents[i] for i in top_indices]
         return top_indices,  best_matches
     
-    def refineModel(self, train_path = "./data/train.jsonl"):
+    def refineModel(self, train_path = "./data/val.jsonl"):
         train_data, len_train_data = get_data.load_datasets(train_path)
         param_grid = {
             "k1": np.arange(1.0, 2.5, 0.2).tolist(),
@@ -69,9 +81,9 @@ class BM25_KBQA:
             correct_predictions = 0
             
             for data in train_data:
-                question = data['question']
+                question = data['tokenized_question']
                 doc_ids = data['document_id']
-                best_match_indices, best_matches = self.retrieve_datasets_bm25(question)
+                best_match_indices, best_matches = self.retrieve_datasets(question)
                 if doc_ids in best_match_indices:
                     correct_predictions += 1
             recall = correct_predictions / len(train_data)
@@ -93,7 +105,7 @@ class BM25_KBQA:
                     wandb.run.summary["best_b"] = best_params["b"]
                     wandb.run.summary["best_recall@5"] = best_recall
 
-            print(f"Experiment {experiment_count}/{total_experiments}: k1={params['k1']}, b={params['b']}, Recall@5={recall:.3f}")
+            print(f"\nExperiment {experiment_count}/{total_experiments}: k1={params['k1']}, b={params['b']}, Recall@5={recall:.3f}")
         
         self.bm25 = BM25Okapi(self.tokenized_docs, k1=best_params["k1"], b=best_params["b"])
         print(f"Best parameters: k1={best_params['k1']}, b={best_params['b']}, Recall@5={best_recall:.3f}")
@@ -126,9 +138,9 @@ class BM25_KBQA:
                     'document_id': best_match_indices
                 }) + '\n')
 
-'''              
+'''      
 if __name__ == "__main__":
-    kbqa = BM25_KBQA(file_path='./data/documents.jsonl')
+    kbqa = BM25_KBQA(file_path='./data/documents.jsonl', top_k=5, refine_model=True)
 
     if kbqa.use_wandb:
         wandb.finish()

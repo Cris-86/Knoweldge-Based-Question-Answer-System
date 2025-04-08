@@ -21,3 +21,8 @@ pip install -r requirements.txt
 ## Usage
 * To run this code, you should first create **credentials** and enter your api_key in the document. 
 * If you want to use wandb to visualize the training process and record results, you should create **wandbKey**  and enter your wandb api_key in the document. 
+
+
+## To do
+- [ ] 调整incontext learning中选择示例，优化generator
+- [ ] 优化搜索器，可以实现句子级的关联

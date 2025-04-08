@@ -4,25 +4,40 @@ import get_data
 import json
 import os
 import tqdm
+import sentence_retriever
+import word2vec
 
 class KBQA:
-    def __init__(self, retriever):
+    def __init__(self, retriever='BM25', fine_search=False):
         if retriever=='BM25':
+            self.retrieverName = 'BM25'
             self.retriever = BM25.BM25_KBQA(file_path='./data/documents.jsonl')
+        elif retriever=='Word2Vec':
+            self.retrieverName = 'Word2Vec'
+            self.retriever = word2vec.Word2Vec_KBQA()
         self.generator_model = generator.AnswerGenerator()
+        self.fine_search = fine_search
 
     def generate_single_question_answer(self, question):
         tokenized_question = get_data.preprocess_text(question)
-        top_indices, retrieved_docs = self.retriever.retrieve_single_question(tokenized_question)
+        top_indices, _ = self.retriever.retrieve_single_question(tokenized_question)
         docs = self.get_docs(top_indices)
         answer = self.generator_model.generate_answer(question, docs)
-        return answer
+        return answer, top_indices
     
     def generate_datasets_answer(self, dataset_path='./data/val.jsonl', gold_file=True, use_wandb=False):
         self.use_wandb = use_wandb
         if self.use_wandb:
             import wandb
             self.get_wandb_api_key()
+            wandb.login(key=self.wandb_api_key) 
+            wandb.init(project="NLP_assignment", 
+                    config={
+                            "model": self.retrieverName,
+                            "dataset_path": dataset_path,
+                            "task": "KBQA",
+                            "description": f"{self.retrieverName} model for KBQA System, fine_search={self.fine_search}"
+                    }) 
         result_path = self.generate_result_path(dataset_path)
         if os.path.exists(result_path):
             os.remove(result_path)
@@ -30,13 +45,20 @@ class KBQA:
         with open(result_path, 'a', encoding='utf-8') as f:
             for data in tqdm.tqdm(datas, total=len_data, desc="Generating answers"):
                 question = data['question']
-                tokenized_question = get_data.preprocess_document(question)
-                best_match_indices, best_matches = self.retriever.retrieve_dataset(tokenized_question)
+                best_match_indices, _ = self.retriever.retrieve_datasets(data['tokenized_question'])
                 retrieved_docs = self.get_docs(best_match_indices)
+                if self.fine_search:
+                    sentence_retriever_model = sentence_retriever.SentenceRetriever(retrieved_docs)
+                    retrieved_docs = sentence_retriever_model.get_retrieved_sentences(question, retrieved_docs)
                 answer = self.generator_model.generate_answer(question, retrieved_docs)
                 data['answer'] = answer
                 data['document_id'] = best_match_indices
-                f.write(json.dumps(data, ensure_ascii=False) + '\n')
+                output = {
+                    'question': question,
+                    'answer': answer,
+                    'document_id': best_match_indices
+                }
+                f.write(json.dumps(output) + '\n')
 
         if gold_file:
             metrics = self.calculate_metrics(dataset_path, result_path)
@@ -44,6 +66,12 @@ class KBQA:
             print(f"Accuracy: {metrics['accuracy']:.3f}")
             print(f"Recall@5: {metrics['recall@5']:.3f}")
             print(f"MRR@5: {metrics['mrr@5']:.3f}")
+            if self.use_wandb:
+                wandb.log({
+                    "accuracy": metrics['accuracy'],
+                    "recall@5": metrics['recall@5'],
+                    "mrr@5": metrics['mrr@5']
+                })
 
     def generate_result_path(self, original_path):
         dir_name = os.path.dirname(original_path)
@@ -109,9 +137,10 @@ if __name__ == "__main__":
     kbqa = KBQA(retriever='BM25')
 
     # Example question
-    # question = "when did the british first land in north america"
-    # answer = kbqa.generate_single_question_answer(question)
+    # question = "when did the 1st world war officially end"
+    # answer, top_indices = kbqa.generate_single_question_answer(question)
     # print(f"Answer: {answer}")
+    # print(f"Top indices: {top_indices}")
 
     # Example validation
     kbqa.generate_datasets_answer(dataset_path='./data/val.jsonl', gold_file=True, use_wandb=False)

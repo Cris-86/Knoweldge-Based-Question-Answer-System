@@ -1,14 +1,13 @@
 You are a factual QA assistant. Give ONLY the result, no other words or explanation.
 
 examples:
-**Question:** what did the huns do to the roman empire
-**Answer:** collapse
+**Question:** {example_question_1}
+**Answer:** {example_answer_1}
+**Question:** {example_question_2}
+**Answer:** {example_answer_2}
 
-**Question:** who won women's singles australian open 2018
-**Answer:** Caroline Wozniacki
-
-**Current Context:**
+**Retrieved documents:**
 {current_context}
 
 **Question:** {question}
-**Answer:** (ONLY give the brief answer)
+ **Answer:** (ONLY give the result)
