@@ -5,6 +5,8 @@ import numpy as np
 import tqdm
 from collections import Counter
 import math
+import pickle
+from scipy.spatial.distance import cdist
 
 class Word2Vec_KBQA:
     def __init__(self, model_path='./model/Word2Vec.bin', file_path='./data/documents.jsonl', top_k=5, refine_model=False, use_wandb=False):
@@ -18,19 +20,57 @@ class Word2Vec_KBQA:
         if name == 'documents':
             self.documents, self.tokenized_docs, self.documentsLen = get_data.load_documents(file_path)
         else:
-            # need refine
             data, len_data = get_data.load_datasets(file_path)
             self.documents = data['question']
             self.tokenized_docs = data['tokenized_question']
-
-        self.model = KeyedVectors.load_word2vec_format(model_path, binary=True)
+        self.model = self.load_word2vec_model(model_path)
         self.vector_size = self.model.vector_size
-        
-        # Calculate IDF values
         self.calculate_idf()
-        
-        # Generate document vectors with IDF weighting
         self.doc_vectors = self.document_to_vector()
+        self.precompute_common_word_vectors()
+    
+    def load_word2vec_model(self, model_path):
+        '''
+        cache_path = model_path + '.cache'
+        if os.path.exists(cache_path):
+            print("Loading cached word2vec model...")
+            with open(cache_path, 'rb') as f:
+                return pickle.load(f)
+        print("Loading and optimizing word2vec model...")
+        model = KeyedVectors.load_word2vec_format(model_path, binary=True)
+        all_tokens = set()
+        for doc in self.tokenized_docs:
+            all_tokens.update(doc)
+        common_query_words = {"what", "who", "where", "when", "why", "how", "which", 
+                             "is", "are", "was", "were", "will", "would", "can", "could"}
+        all_tokens.update(common_query_words)
+        filtered_model = KeyedVectors(vector_size=model.vector_size)
+        for token in all_tokens:
+            if token in model:
+                filtered_model.add_vector(token, model[token])
+        with open(cache_path, 'wb') as f:
+            pickle.dump(filtered_model, f)
+        return filtered_model
+        '''
+
+        model = KeyedVectors.load_word2vec_format(model_path, binary=True)
+        return model
+
+    def precompute_common_word_vectors(self):
+        word_counts = Counter()
+        for doc in self.tokenized_docs:
+            word_counts.update(doc)
+
+        common_words = [word for word, _ in word_counts.most_common(1000)]
+
+        common_query_words = ["what", "who", "where", "when", "why", "how", "which"]
+        common_words.extend(common_query_words)
+
+        self.common_word_vectors = {}
+        for word in common_words:
+            if word in self.model:
+                self.common_word_vectors[word] = self.model[word]
+
         
     def get_file_name(self, file_path):
         file_name_with_extension = os.path.basename(file_path)
@@ -38,143 +78,93 @@ class Word2Vec_KBQA:
         return documents
     
     def calculate_idf(self):
-        """Calculate IDF values for all words in the corpus"""
-        self.term_doc_freq = Counter()
-        self.doc_count = len(self.tokenized_docs)
+        idf_cache_path = os.path.join(os.path.dirname(self.file_path), 'idf_values.pkl')
         
-        # Count document frequency for each term
-        for doc in self.tokenized_docs:
-            terms_in_doc = set(doc)  # Count each term only once per document
-            for term in terms_in_doc:
-                self.term_doc_freq[term] += 1
-        
-        # Calculate IDF for each term
-        self.idf = {}
-        for term, doc_freq in self.term_doc_freq.items():
-            self.idf[term] = math.log(self.doc_count / (1 + doc_freq))
+        if os.path.exists(idf_cache_path):
+            with open(idf_cache_path, 'rb') as f:
+                self.idf = pickle.load(f)
+        else:
+            self.term_doc_freq = Counter()
+            self.doc_count = len(self.tokenized_docs)
+            
+            for doc in tqdm.tqdm(self.tokenized_docs, desc="Calculating IDF values"):
+                terms_in_doc = set(doc)  
+                for term in terms_in_doc:
+                    self.term_doc_freq[term] += 1
+            
+            self.idf = {}
+            for term, doc_freq in self.term_doc_freq.items():
+                self.idf[term] = math.log(self.doc_count / (1 + doc_freq))
+            
+            with open(idf_cache_path, 'wb') as f:
+                pickle.dump(self.idf, f)
     
     def document_to_vector(self):
         savepath = os.path.join(os.path.dirname(self.file_path), 'document_vectors_idf_weighted.npy')
         if os.path.exists(savepath):
             return np.load(savepath)
         else:
-            vectors = []
-            for doc in tqdm.tqdm(self.tokenized_docs, desc="Converting documents to vectors with IDF weighting"):
-                doc_vector = self.text_to_vector(doc)
-                vectors.append(doc_vector)
+            print("Converting documents to vectors (this may take a while but will be cached)...")
+            batch_size = 1000
+            total_docs = len(self.tokenized_docs)
+            vectors = np.zeros((total_docs, self.vector_size))
             
-            vectors = np.array(vectors)
+            for i in tqdm.tqdm(range(0, total_docs, batch_size), desc="Processing document batches"):
+                end_idx = min(i + batch_size, total_docs)
+                for j in range(i, end_idx):
+                    vectors[j] = self.text_to_vector(self.tokenized_docs[j])
+            
             np.save(savepath, vectors)
             return vectors
     
     def text_to_vector(self, tokens):
         vector = np.zeros(self.vector_size)
         total_weight = 0
-        
-        # First pass: calculate TF-IDF weighted vector
+
         for token in tokens:
-            if token in self.model:
-                # Get IDF weight (default to average if term not in corpus)
-                idf_weight = self.idf.get(token, 1.0)
-                # Add weighted vector
-                vector += self.model[token] * idf_weight
-                total_weight += idf_weight
+            if token in self.common_word_vectors:
+                word_vector = self.common_word_vectors[token]
+            elif token in self.model:
+                word_vector = self.model[token]
+            else:
+                continue
+            idf_weight = self.idf.get(token, 1.0)
+            vector += word_vector * idf_weight
+            total_weight += idf_weight
         
-        # Normalize by total weight
         if total_weight > 0:
             vector /= total_weight
             
-        # Add context-aware weighting - emphasize terms at beginning and end of document
-        if len(tokens) > 0:
-            position_weighted_vector = np.zeros(self.vector_size)
-            weights_sum = 0
-            
-            # Give more weight to first and last few tokens (topic and conclusion usually)
-            important_positions = min(5, len(tokens))
-            for i in range(important_positions):
-                # Front tokens
-                if tokens[i] in self.model:
-                    position_weighted_vector += self.model[tokens[i]] * 1.5
-                    weights_sum += 1.5
-                
-                # End tokens
-                if i < len(tokens) and tokens[-(i+1)] in self.model:
-                    position_weighted_vector += self.model[tokens[-(i+1)]] * 1.2
-                    weights_sum += 1.2
-            
-            if weights_sum > 0:
-                position_weighted_vector /= weights_sum
-                # Combine with TF-IDF vector (80% TF-IDF, 20% position-weighted)
-                vector = 0.8 * vector + 0.2 * position_weighted_vector
-                
         return vector
+
     
     def query_to_vector(self, query_tokens):
-        """Convert query to vector with special weighting for question words"""
-        '''
-        question_words = {"what", "who", "where", "when", "why", "how", "which"}
-        
-        # Basic vector with TF-IDF weighting
-        basic_vector = self.text_to_vector(query_tokens)
-        
-        # Extract and emphasize key terms (excluding question words)
-        key_terms_vector = np.zeros(self.vector_size)
-        key_term_count = 0
-        
-        for token in query_tokens:
-            if token not in question_words and token in self.model:
-                # Apply higher weight to key terms
-                key_terms_vector += self.model[token] * 2.0
-                key_term_count += 1
-        
-        if key_term_count > 0:
-            key_terms_vector /= key_term_count
-            # Combine vectors (60% key terms, 40% basic vector)
-            return 0.6 * key_terms_vector + 0.4 * basic_vector
-        '''
-        basic_vector = self.text_to_vector(query_tokens)
+        return self.text_to_vector(query_tokens)
 
-        return basic_vector
+    
+    def batch_cosine_similarity(self, query_vector, doc_vectors):
+        if query_vector.ndim == 1:
+            query_vector = query_vector.reshape(1, -1)
+
+        similarities = 1 - cdist(query_vector, doc_vectors, 'cosine')[0]
+        return similarities
+
     
     def cosine_similarity(self, v1, v2):
-        """Enhanced cosine similarity with epsilon to avoid division by zero"""
         dot = np.dot(v1, v2)
         norm1 = np.linalg.norm(v1)
         norm2 = np.linalg.norm(v2)
         
-        epsilon = 1e-10  # Small constant to avoid division by zero
+        epsilon = 1e-10 
         return dot / (max(norm1 * norm2, epsilon))
     
     def retrieve_single_question(self, question):
-        question = get_data.preprocess_document(question)
-        query_vector = self.query_to_vector(question)
-        
-        # Apply dual-direction cosine similarity
-        similarities = []
-        for i, doc_vector in enumerate(self.doc_vectors):
-            # Forward similarity: how well the query matches the document
-            forward_sim = self.cosine_similarity(query_vector, doc_vector)
-            
-            # Backward similarity: how well key parts of document match the query
-            # This helps with partial matches where the document contains the answer
-            doc_tokens = self.tokenized_docs[i]
-            
-            # Get most similar terms from document to query
-            if len(doc_tokens) > 0:
-                # Create a specialized document vector focusing on terms most relevant to query
-                focused_doc_vector = self.create_focused_vector(doc_tokens, question)
-                backward_sim = self.cosine_similarity(focused_doc_vector, query_vector)
-                
-                # Combined similarity score (70% forward, 30% backward)
-                combined_sim = 0.7 * forward_sim + 0.3 * backward_sim
-                similarities.append((i, combined_sim))
-            else:
-                similarities.append((i, forward_sim))
-        
-        similarities.sort(key=lambda x: x[1], reverse=True)
-        top_k_indices = [idx for idx, _ in similarities[:self.top_k]]
-        top_k_docs = [self.tokenized_docs[idx] for idx in top_k_indices]
-        
+        question_tokens = get_data.preprocess_document(question)
+        query_vector = self.query_to_vector(question_tokens)
+        similarities = self.batch_cosine_similarity(query_vector, self.doc_vectors)
+        top_indices = np.argsort(-similarities)[:self.top_k]
+        top_k_indices = top_indices.tolist()
+        top_k_docs = [self.tokenized_docs[idx] for idx in top_k_indices]      
         return top_k_indices, top_k_docs
     
     def create_focused_vector(self, doc_tokens, query_tokens):
@@ -248,44 +238,15 @@ class Word2Vec_KBQA:
     def retrieve_datasets(self, tokenized_question):
         query_vector = self.query_to_vector(tokenized_question)
 
-        # Use the same enhanced similarity approach as in retrieve_single_question
-        similarities = []
-        for i, doc_vector in enumerate(self.doc_vectors):
-            # Forward similarity
-            forward_sim = self.cosine_similarity(query_vector, doc_vector)
-            
-            # Backward similarity
-            doc_tokens = self.tokenized_docs[i]
-            
-            if len(doc_tokens) > 0:
-                focused_doc_vector = self.create_focused_vector(doc_tokens, tokenized_question)
-                backward_sim = self.cosine_similarity(focused_doc_vector, query_vector)
-                
-                # Combine similarities with weights
-                combined_sim = 0.7 * forward_sim + 0.3 * backward_sim
-                similarities.append((i, combined_sim))
-            else:
-                similarities.append((i, forward_sim))
-        
-        similarities.sort(key=lambda x: x[1], reverse=True)
+        similarities = self.batch_cosine_similarity(query_vector, self.doc_vectors)
 
-        top_k_indices = [idx for idx, _ in similarities[:self.top_k]]
-        top_k_docs = [self.tokenized_docs[idx] for idx in top_k_indices]
-        '''
-        # Return more candidates for better recall
-        expanded_k = min(self.top_k + 2, len(similarities))
-        top_k_indices = [idx for idx, _ in similarities[:expanded_k]]
+        top_indices = np.argsort(-similarities)[:self.top_k]
+
+        top_k_indices = top_indices.tolist()
         top_k_docs = [self.tokenized_docs[idx] for idx in top_k_indices]
         
-        # Post-processing to ensure diversity in results
-        if len(top_k_indices) > self.top_k:
-            # Keep only top_k most diverse results
-            diverse_indices, diverse_docs = self.ensure_diversity(
-                top_k_indices, top_k_docs, tokenized_question
-            )
-            return diverse_indices[:self.top_k], diverse_docs[:self.top_k]
-        '''
         return top_k_indices, top_k_docs
+
     
     def ensure_diversity(self, indices, docs, query):
         """Ensure diversity in retrieved documents"""
