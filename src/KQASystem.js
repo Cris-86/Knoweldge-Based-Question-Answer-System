@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 
 function KQASystem() {
   const [question, setQuestion] = useState('');
-  const [algorithm, setAlgorithm] = useState('TF-IDF');
+  const [algorithm, setAlgorithm] = useState('Word2Vec');
   const [retrievedDocuments, setRetrievedDocuments] = useState([]);
   const [answer, setAnswer] = useState('');
 
@@ -17,7 +17,7 @@ function KQASystem() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     // 模拟从后台获取数据
-    const documents = ['Document 1', 'Document 2', 'Document 3'];
+    const documents = ['Document 1', 'Document 2', 'Document 3', 'Document 4', 'Document 5'];
     const generatedAnswer = `This is the generated answer based on the ${algorithm} algorithm.`;
 
     // 更新状态
@@ -42,9 +42,10 @@ function KQASystem() {
         <div style={{ marginTop: '20px' }}>
           <label>Choose Search Algorithm:</label>
           <select value={algorithm} onChange={handleAlgorithmChange} style={{ marginLeft: '10px', padding: '5px' }}>
-            <option value="TF-IDF">TF-IDF</option>
+            <option value="Word2Vec">Word2Vec</option>
             <option value="BM25">BM25</option>
-            <option value="LSA">Latent Semantic Analysis (LSA)</option>
+            <option value="ColBert">ColBert</option>
+            <option value="Hybrid">Hybrid</option>
           </select>
         </div>
       </form>
