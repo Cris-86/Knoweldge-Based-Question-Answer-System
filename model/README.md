@@ -3,15 +3,19 @@
 The code is implemented in **Python** 
 
 ## Requirements
-* Python 3.9
-* beautifulsoup4==4.13.3
+* beautifulsoup4==4.11.2
+* colbert_ai==0.2.21
+* gensim==4.3.3
 * jsonlines==4.0.0
 * nltk==3.9.1
-* numpy==2.2.4
+* numpy==1.24.2
 * rank_bm25==0.2.2
 * Requests==2.32.3
-* scikit_learn==1.6.1
-* tqdm==4.66.5
+* scikit_learn==1.3.2
+* scipy==1.15.2
+* tqdm==4.67.1
+* wandb (if use wandb)
+* sentence_transformers
 
 You can run 
 ```bash
@@ -26,3 +30,4 @@ pip install -r requirements.txt
 ## To do
 - [ ] 调整incontext learning中选择示例，优化generator
 - [ ] 优化搜索器，可以实现句子级的关联
+source /etc/network_turbo

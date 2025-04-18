@@ -15,6 +15,7 @@ import os
 import re
 from bs4 import BeautifulSoup
 import html
+import pickle
 
 def preprocess_document(text):
     text = html.unescape(text)
@@ -87,6 +88,7 @@ def load_datasets(file_path='./data/train.jsonl'):
         for line in tqdm.tqdm(f, desc="Loading datasets"):
             if line.strip():
                 data = json.loads(line)
+                print(data['question'])
                 tokenized_question = preprocess_document(data['question'])
                 datasets.append({
                     'question': data['question'],
@@ -96,44 +98,55 @@ def load_datasets(file_path='./data/train.jsonl'):
                 })
     return datasets, len(datasets)
 
-def get_pyserini_path(file_path):
-    return os.path.join(os.path.dirname(file_path), 'pyserini_' + os.path.basename(file_path))
+def get_ColBERT_preprocessed_path(file_path):
+    return os.path.join(os.path.dirname(file_path), 'ColBERT_processed_document.pkl')
 
-def trans2pyserini(file_path='./data/documents.jsonl'):
-    pyserini_path = get_pyserini_path(file_path)
-    if not os.path.exists(pyserini_path):
-        with open(file_path, 'r', encoding='utf-8') as f_in, open(pyserini_path, 'w', encoding='utf-8') as f_out:
-            for line in tqdm.tqdm(f_in, desc="Converting to Pyserini format"):
-                if line.strip():
-                    doc = json.loads(line)
-                    dpr_format = {
-                        "id": str(doc["document_id"]),
-                        "contents": doc["document_text"]
-                    }
-                    f_out.write(json.dumps(dpr_format) + "\n")
+def process_documents_ColBERT(input_path='./data/documents.jsonl', max_passage_length=512):
+    
+    cache_path = get_ColBERT_preprocessed_path(input_path)
+    if os.path.exists(cache_path):
+        with open(cache_path, 'rb') as f:
+            cache_data = pickle.load(f)
+            return cache_data['doc_ids'], cache_data['doc_texts']
 
-def build_dpr_index(file_path='./data/documents.jsonl'):
-    processed_path = trans2pyserini(file_path)
+    doc_ids = []
+    doc_texts = []
     
-    encode_cmd = f"""
-    python -m pyserini.encode \
-      input   --corpus {processed_path} \
-              --fields text \
-      output  --embeddings dpr_index \
-      encoder --encoder facebook/dpr-ctx_encoder-multiset-base \
-              --fields text \
-              --batch-size 32 \
-              --device cpu
-    """
+    with open(input_path, 'r', encoding='utf-8') as f:
+        for line in tqdm.tqdm(f, desc="Processing documents"):
+            data = json.loads(line)
+            doc_id = data['document_id']
+            text = preprocess_text(data['document_text'])
+            
+            sentences = text.split('. ')
+            current_chunk = []
+            current_length = 0
+            
+            for sent in sentences:
+                sent += '. '
+                sent_length = len(sent)
+                
+                if current_length + sent_length > max_passage_length and current_chunk:
+                    chunk = ''.join(current_chunk).strip()
+                    if chunk:
+                        doc_ids.append(doc_id)
+                        doc_texts.append(chunk)
+                    current_chunk = []
+                    current_length = 0
+                
+                current_chunk.append(sent)
+                current_length += sent_length
+            
+            if current_chunk:
+                chunk = ''.join(current_chunk).strip()
+                if chunk:
+                    doc_ids.append(doc_id)
+                    doc_texts.append(chunk)
     
-    index_cmd = """
-    python -m pyserini.index.faiss \
-      --input dpr_index \
-      --output dpr_faiss_index \
-      --hnsw
-    """
+    with open(cache_path, 'wb') as f:
+        pickle.dump({
+            'doc_ids': doc_ids,
+            'doc_texts': doc_texts
+        }, f, protocol=pickle.HIGHEST_PROTOCOL)
     
-    print("Running encoding command:")
-    os.system(encode_cmd)
-    print("\nBuilding FAISS index:")
-    os.system(index_cmd)
+    return doc_ids, doc_texts

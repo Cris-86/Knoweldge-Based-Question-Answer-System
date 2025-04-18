@@ -4,12 +4,15 @@ import get_data
 import json
 import os
 import tqdm
-import sentence_retriever
 import word2vec
+import ColBERT_KBQA
 
 class KBQA:
-    def __init__(self, retriever='BM25', fine_search=False, top_k=5):
+    def __init__(self, retriever='BM25', fine_search=False, top_k=5, sentence_search=False):
         self.top_k = top_k
+        self.fine_search = fine_search
+        self.sentence_search = sentence_search
+        
         if retriever=='BM25':
             self.retrieverName = 'BM25'
             self.retriever = BM25.BM25_KBQA(file_path='./data/documents.jsonl')
@@ -20,19 +23,40 @@ class KBQA:
             self.retrieverName = 'Hybrid'
             self.bm25_retriever = BM25.BM25_KBQA()
             self.w2v_retriever = word2vec.Word2Vec_KBQA()
+        elif retriever=='ColBERT':
+            self.retrieverName = 'ColBERT'
+            self.retriever = ColBERT_KBQA.ColBERT_KBQA(
+                file_path='./data/documents.jsonl', 
+                top_k=top_k,
+                enable_sentence_search=sentence_search
+            )
         self.generator_model = generator.AnswerGenerator()
-        self.fine_search = fine_search
 
-    def generate_single_question_answer(self, question):        
+    def generate_single_question_answer(self, question):
         tokenized_question = get_data.preprocess_document(question)
+        
         if self.retrieverName == 'Hybrid':
             bm25_indices, _ = self.bm25_retriever.retrieve_single_question(tokenized_question)
             w2v_indices, _ = self.w2v_retriever.retrieve_single_question(tokenized_question)
             top_indices = list(dict.fromkeys(bm25_indices + w2v_indices))
+            docs = self.get_docs(top_indices)
+        elif self.retrieverName == 'ColBERT':
+            if self.sentence_search and self.fine_search:
+                top_indices, relevant_sentences = self.retriever.retrieve_with_sentence_search(
+                    question, enable_fine_search=True
+                )
+                docs = self.get_docs(top_indices)
+                if relevant_sentences:
+                    docs = ['. '.join(relevant_sentences)]
+            else:
+                top_indices, _ = self.retriever.retrieve_single_question(question)
+                docs = self.get_docs(top_indices)
         else:
             top_indices, _ = self.retriever.retrieve_single_question(tokenized_question)
-        docs = self.get_docs(top_indices)
+            docs = self.get_docs(top_indices)
+            
         answer = self.generator_model.generate_answer(question, docs)
+        print(f"docs: {docs}")
         return answer, top_indices
     
     def generate_datasets_answer(self, dataset_path='./data/val.jsonl', gold_file=True, use_wandb=False, batch_size=10):
@@ -67,14 +91,20 @@ class KBQA:
                         bm25_indices, _ = self.bm25_retriever.retrieve_datasets(data['tokenized_question'])
                         w2v_indices, _ = self.w2v_retriever.retrieve_datasets(data['tokenized_question'])
                         best_match_indices = list(dict.fromkeys(bm25_indices + w2v_indices))[:self.top_k]
+                    elif self.retrieverName == 'ColBERT':
+                        if self.sentence_search and self.fine_search:
+                            best_match_indices, relevant_sentences = self.retriever.retrieve_with_sentence_search(
+                                question, enable_fine_search=True
+                            )
+                        else:
+                            best_match_indices, _ = self.retriever.retrieve_datasets(question)
                     else:
                         best_match_indices, _ = self.retriever.retrieve_datasets(data['tokenized_question'])
                     
                     retrieved_docs = self.get_docs(best_match_indices)
-                    
-                    if self.fine_search:
-                        sentence_retriever_model = sentence_retriever.SentenceRetriever(retrieved_docs)
-                        retrieved_docs = sentence_retriever_model.get_retrieved_sentences(question, retrieved_docs)
+                    if self.sentence_search and self.fine_search:
+                        if relevant_sentences:
+                            retrieved_docs = ['. '.join(relevant_sentences)]
                     
                     answer = self.generator_model.generate_answer(question, retrieved_docs)
                     
@@ -158,9 +188,11 @@ class KBQA:
             
         return metrics
 
-'''
+
 if __name__ == "__main__":
-    kbqa = KBQA(retriever='BM25')
+    # source /etc/network_turbo
+
+    # kbqa = KBQA(retriever='ColBERT', fine_search=True, sentence_search=True)
 
     # Example question
     # question = "when did the 1st world war officially end"
@@ -169,5 +201,18 @@ if __name__ == "__main__":
     # print(f"Top indices: {top_indices}")
 
     # Example validation
+    # kbqa.generate_datasets_answer(dataset_path='./data/val.jsonl', gold_file=True, use_wandb=True)
+    # kbqa.generate_datasets_answer(dataset_path='./data/val.jsonl', gold_file=True, use_wandb=True)
+
+    kbqa = KBQA(retriever='ColBERT')
     kbqa.generate_datasets_answer(dataset_path='./data/val.jsonl', gold_file=True, use_wandb=True)
+
+'''
+if __name__ == "__main__":
+    # kbqa = KBQA(retriever='ColBERT', fine_search=True, sentence_search=True)
+    kbqa = KBQA(retriever='ColBERT')
+    question = "when did the british first land in north america"
+    answer, top_indices = kbqa.generate_single_question_answer(question)
+    print(f"Answer: {answer}")
+    print(f"Top indices: {top_indices}")
 '''
