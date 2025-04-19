@@ -16,15 +16,25 @@ function KQASystem() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    // 模拟从后台获取数据
-    const documents = ['Document 1', 'Document 2', 'Document 3', 'Document 4', 'Document 5'];
-    const generatedAnswer = `This is the generated answer based on the ${algorithm} algorithm.`;
 
-    // 更新状态
-    setRetrievedDocuments(documents);
-    setAnswer(generatedAnswer);
+    try {
+      const response = await fetch('http://localhost:8080/ask', {
+        // mode: 'no-cors',
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ question, algorithm }),
+      });
+
+      const data = await response.json();
+      setRetrievedDocuments(data.documents || []);
+      setAnswer(data.answer || '');
+    } catch (error) {
+      console.error('Error:', error);
+    }
   };
-
+  
   return (
     <div style={{ maxWidth: '600px', margin: '0 auto', padding: '20px' }}>
       <h1>Knowledge Question Answering (KQA) System</h1>
