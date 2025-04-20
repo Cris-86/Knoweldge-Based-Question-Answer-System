@@ -41,7 +41,7 @@ streamlit run app.py
 ### UI interface
 #### Selecting a search algorithm 
 
-Choose whether to have a GPU based on the environment. **Note that this will affect the choice of hybrid algorithm. **
+Choose whether to have a GPU based on the environment. **Note that this will affect the choice of hybrid algorithm**
 
 w/o GPU hybrid algorithm is the combination of BM25 and word2vec. w/ GPU hybrid algorithm is the combination of BM25, word2vec and Colbert.
 
