@@ -9,19 +9,21 @@ The overall workflow is as follows:
 </p> 
 
 ## Requirements
-* beautifulsoup4==4.11.2
-* colbert_ai==0.2.21
-* gensim==4.3.3
-* jsonlines==4.0.0
-* nltk==3.9.1
-* numpy==1.24.2
-* rank_bm25==0.2.2
-* Requests==2.32.3
-* scikit_learn==1.3.2
-* scipy==1.15.2
-* tqdm==4.67.1
-* wandb (if use wandb)
+* beautifulsoup4
+* colbert_ai
+* gensim
+* jsonlines
+* nltk
+* numpy
+* rank_bm25
+* Requests
+* scikit_learn
+* scipy
+* tqdm
+* wandb
 * sentence_transformers
+* bert_score
+* streamlit
 
 You can run 
 ```bash
