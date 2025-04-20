@@ -1,8 +1,0 @@
-credentials
-wandbKey
-wandb/
-*.pyc
-__pycache__/
-*.pdf
-data/
-model/
