@@ -13,7 +13,7 @@ You are a professional research assistant. Your task is to analyze a document re
    - Contextual relationships between concepts
 3. Mark uncertain or conflicting information with "[NEEDS VERIFICATION]".
 4. Format:
-   **File {X} Summary**
+   **Summary**
    - Point 1
    - Point 2
    - ...

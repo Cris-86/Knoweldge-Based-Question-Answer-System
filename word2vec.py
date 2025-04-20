@@ -33,29 +33,6 @@ class Word2Vec_KBQA:
         self.precompute_common_word_vectors()
     
     def load_word2vec_model(self, model_path):
-        '''
-        cache_path = model_path + '.cache'
-        if os.path.exists(cache_path):
-            print("Loading cached word2vec model...")
-            with open(cache_path, 'rb') as f:
-                return pickle.load(f)
-        print("Loading and optimizing word2vec model...")
-        model = KeyedVectors.load_word2vec_format(model_path, binary=True)
-        all_tokens = set()
-        for doc in self.tokenized_docs:
-            all_tokens.update(doc)
-        common_query_words = {"what", "who", "where", "when", "why", "how", "which", 
-                             "is", "are", "was", "were", "will", "would", "can", "could"}
-        all_tokens.update(common_query_words)
-        filtered_model = KeyedVectors(vector_size=model.vector_size)
-        for token in all_tokens:
-            if token in model:
-                filtered_model.add_vector(token, model[token])
-        with open(cache_path, 'wb') as f:
-            pickle.dump(filtered_model, f)
-        return filtered_model
-        '''
-
         model = KeyedVectors.load_word2vec_format(model_path, binary=True)
         return model
 

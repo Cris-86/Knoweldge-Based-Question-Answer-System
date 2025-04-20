@@ -1,70 +1,66 @@
-# Getting Started with Create React App
+# Model 
 
-This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).
+The code is implemented in **Python** and UI is implemented in **streamlit**
 
-## Available Scripts
+The overall workflow is as follows:
 
-In the project directory, you can run:
+<p align="center"> 
+    <img src="img\workflow.png">
+</p> 
 
-### `npm start`
+## Requirements
+* beautifulsoup4==4.11.2
+* colbert_ai==0.2.21
+* gensim==4.3.3
+* jsonlines==4.0.0
+* nltk==3.9.1
+* numpy==1.24.2
+* rank_bm25==0.2.2
+* Requests==2.32.3
+* scikit_learn==1.3.2
+* scipy==1.15.2
+* tqdm==4.67.1
+* wandb (if use wandb)
+* sentence_transformers
 
-Runs the app in the development mode.\
-Open [http://localhost:3000](http://localhost:3000) to view it in your browser.
+You can run 
+```bash
+pip install -r requirements.txt
+```
 
-The page will reload when you make changes.\
-You may also see any lint errors in the console.
+## Usage
+* To run this code, you should first create **credentials** and enter your api_key in the document. 
+* If you want to use wandb to visualize the training process and record results, you should create **wandbKey**  and enter your wandb api_key in the document. 
+* You can directly run streamlit in your CMD to get the UI interface and the corresponding KBQA system.
 
-### `npm test`
+You can run 
+```bash
+streamlit run app.py
+```
 
-Launches the test runner in the interactive watch mode.\
-See the section about [running tests](https://facebook.github.io/create-react-app/docs/running-tests) for more information.
+### UI interface
+#### Selecting a search algorithm 
 
-### `npm run build`
+Choose whether to have a GPU based on the environment. **Note that this will affect the choice of hybrid algorithm. **
 
-Builds the app for production to the `build` folder.\
-It correctly bundles React in production mode and optimizes the build for the best performance.
+w/o GPU hybrid algorithm is the combination of BM25 and word2vec. w/ GPU hybrid algorithm is the combination of BM25, word2vec and Colbert.
 
-The build is minified and the filenames include the hashes.\
-Your app is ready to be deployed!
+<p align="center"> 
+    <img src=".\img\1.png">
+</p>  
 
-See the section about [deployment](https://facebook.github.io/create-react-app/docs/deployment) for more information.
+You can choose example question as input.
 
-### `npm run eject`
+<p align="center"> 
+    <img src=".\img\2.png">
+</p> 
 
-**Note: this is a one-way operation. Once you `eject`, you can't go back!**
+The final output wil include 3 parts, Generated answer, Summary of retrieved documents, Retrieved files:
 
-If you aren't satisfied with the build tool and configuration choices, you can `eject` at any time. This command will remove the single build dependency from your project.
+<p align="center"> 
+    <img src=".\img\3.png">
+</p> 
 
-Instead, it will copy all the configuration files and the transitive dependencies (webpack, Babel, ESLint, etc) right into your project so you have full control over them. All of the commands except `eject` will still work, but they will point to the copied scripts so you can tweak them. At this point you're on your own.
-
-You don't have to ever use `eject`. The curated feature set is suitable for small and middle deployments, and you shouldn't feel obligated to use this feature. However we understand that this tool wouldn't be useful if you couldn't customize it when you are ready for it.
-
-## Learn More
-
-You can learn more in the [Create React App documentation](https://facebook.github.io/create-react-app/docs/getting-started).
-
-To learn React, check out the [React documentation](https://reactjs.org/).
-
-### Code Splitting
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/code-splitting](https://facebook.github.io/create-react-app/docs/code-splitting)
-
-### Analyzing the Bundle Size
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size](https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size)
-
-### Making a Progressive Web App
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app](https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app)
-
-### Advanced Configuration
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/advanced-configuration](https://facebook.github.io/create-react-app/docs/advanced-configuration)
-
-### Deployment
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/deployment](https://facebook.github.io/create-react-app/docs/deployment)
-
-### `npm run build` fails to minify
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify](https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify)
+<p align="center"> 
+    <img src=".\img\4.png">
+</p> 
