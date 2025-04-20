@@ -21,6 +21,7 @@ class BM25_KBQA:
             self.tokenized_docs = data['tokenized_question']
         self.refine_model = refine_model
         self.use_wandb = use_wandb
+        
         if self.refine_model:
             if self.use_wandb:
                 self.get_wandb_api_key()
@@ -35,7 +36,8 @@ class BM25_KBQA:
                         }) 
             self.refineModel()
         else:
-            self.bm25 = BM25Okapi(self.tokenized_docs, k1=2.4, b=0.9)
+            self.bm25 = BM25Okapi(self.tokenized_docs, k1=2.8, b=0.6)
+
     
     def get_file_name(self, file_path):
         file_name_with_extension = os.path.basename(file_path)
@@ -49,18 +51,56 @@ class BM25_KBQA:
         else:
             raise FileNotFoundError(f"Credentials file '{file_path}' not found.")
 
-    def retrieve_single_question(self, question):
-        tokenized_question = get_data.preprocess_document(question)
-        scores = self.bm25.get_scores(tokenized_question)
-        top_indices = sorted(range(len(scores)), key=lambda i: -scores[i])[:self.top_k]
-        best_matches = [self.documents[i] for i in top_indices]
-        return top_indices,  best_matches
+    def retrieve_single_question(self, tokenized_question):
+        expanded_query = self.expand_query(tokenized_question)
+        original_scores = self.bm25.get_scores(tokenized_question)
+        expanded_scores = self.bm25.get_scores(expanded_query)
+        combined_scores = [0.7 * original_scores[i] + 0.3 * expanded_scores[i] for i in range(len(original_scores))]
+        initial_k = min(self.top_k + 3, len(combined_scores))
+        top_indices = sorted(range(len(combined_scores)), key=lambda i: -combined_scores[i])[:initial_k]
+        final_indices = self.post_process_results(top_indices, tokenized_question)[:self.top_k]
+        # best_matches = [self.documents[i] for i in final_indices]
+        return final_indices, combined_scores
+
+    def expand_query(self, tokenized_question):
+        expanded_query = tokenized_question.copy()
+        for token in tokenized_question:
+            if token == "when":
+                expanded_query.extend(["date", "time", "year"])
+            elif token == "where":
+                expanded_query.extend(["location", "place", "country"])
+            elif token == "who":
+                expanded_query.extend(["person", "name", "individual"])
+            elif token == "how":
+                expanded_query.extend(["method", "way", "means"])     
+        return expanded_query
+    
+    def post_process_results(self, indices, query):
+        return indices[:self.top_k]
+
+    
+    def calculate_document_difference(self, doc_idx, selected_indices):
+        doc_terms = set(self.tokenized_docs[doc_idx])
+        avg_difference = 0
+        
+        for sel_idx in selected_indices:
+            sel_terms = set(self.tokenized_docs[sel_idx])
+            if len(doc_terms.union(sel_terms)) > 0:
+                similarity = len(doc_terms.intersection(sel_terms)) / len(doc_terms.union(sel_terms))
+                avg_difference += (1 - similarity)
+            
+        return avg_difference / len(selected_indices) if selected_indices else 0
 
     def retrieve_datasets(self, tokenized_question):
-        scores = self.bm25.get_scores(tokenized_question)
-        top_indices = sorted(range(len(scores)), key=lambda i: -scores[i])[:self.top_k]
-        best_matches = [self.documents[i] for i in top_indices]
-        return top_indices,  best_matches
+        expanded_query = self.expand_query(tokenized_question)
+        original_scores = self.bm25.get_scores(tokenized_question)
+        expanded_scores = self.bm25.get_scores(expanded_query)
+        combined_scores = [0.7 * original_scores[i] + 0.3 * expanded_scores[i] for i in range(len(original_scores))]
+        initial_k = min(self.top_k + 3, len(combined_scores))
+        top_indices = sorted(range(len(combined_scores)), key=lambda i: -combined_scores[i])[:initial_k]
+        final_indices = self.post_process_results(top_indices, tokenized_question)[:self.top_k]
+        # best_matches = [self.documents[i] for i in final_indices]
+        return final_indices, combined_scores
     
     def refineModel(self, train_path = "./data/val.jsonl"):
         train_data, len_train_data = get_data.load_datasets(train_path)
@@ -132,13 +172,13 @@ class BM25_KBQA:
         with open(result_path, 'w', encoding='utf-8') as f:
             for data in tqdm.tqdm(test_data):
                 question = data['question']
-                best_match_indices, best_matches = self.retrieve_datasets_bm25(question)
+                best_match_indices, best_matches = self.retrieve_datasets(question)
                 f.write(json.dumps({
                     'question': question,
                     'document_id': best_match_indices
                 }) + '\n')
 
-'''      
+'''
 if __name__ == "__main__":
     kbqa = BM25_KBQA(file_path='./data/documents.jsonl', top_k=5, refine_model=True)
 

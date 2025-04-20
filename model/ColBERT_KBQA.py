@@ -38,7 +38,7 @@ class ColBERT_KBQA:
         if self.sentence_index is None and self.enable_sentence_search:
             self.sentence_index = SentenceIndex()
 
-    def retrieve_with_sentence_search(self, question, enable_fine_search=False, sentence_top_k=5):
+    def retrieve_with_sentence_search(self, question, enable_fine_search=False, sentence_top_k=10):
         doc_indices, _ = self.retrieve_single_question(question)
         if not enable_fine_search or not self.enable_sentence_search:
             return doc_indices, []

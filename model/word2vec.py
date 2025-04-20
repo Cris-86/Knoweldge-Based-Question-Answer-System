@@ -9,7 +9,7 @@ import pickle
 from scipy.spatial.distance import cdist
 
 class Word2Vec_KBQA:
-    def __init__(self, model_path='./model/Word2Vec.bin', file_path='./data/documents.jsonl', top_k=5, refine_model=False, use_wandb=False):
+    def __init__(self, file_path='./data/documents.jsonl', top_k=5, refine_model=False, use_wandb=False, model_path='./model/Word2Vec.bin'):
         self.model_path = model_path
         self.file_path = file_path
         self.top_k = top_k
@@ -164,8 +164,9 @@ class Word2Vec_KBQA:
         similarities = self.batch_cosine_similarity(query_vector, self.doc_vectors)
         top_indices = np.argsort(-similarities)[:self.top_k]
         top_k_indices = top_indices.tolist()
-        top_k_docs = [self.tokenized_docs[idx] for idx in top_k_indices]      
-        return top_k_indices, top_k_docs
+        # top_k_docs = [self.tokenized_docs[idx] for idx in top_k_indices]      
+        top_k_scores = similarities[top_indices].tolist()
+        return top_k_indices, top_k_scores
     
     def create_focused_vector(self, doc_tokens, query_tokens):
         """Create a vector focused on terms in document that are most relevant to query"""
@@ -237,16 +238,12 @@ class Word2Vec_KBQA:
     
     def retrieve_datasets(self, tokenized_question):
         query_vector = self.query_to_vector(tokenized_question)
-
         similarities = self.batch_cosine_similarity(query_vector, self.doc_vectors)
-
         top_indices = np.argsort(-similarities)[:self.top_k]
-
         top_k_indices = top_indices.tolist()
-        top_k_docs = [self.tokenized_docs[idx] for idx in top_k_indices]
-        
-        return top_k_indices, top_k_docs
-
+        # top_k_docs = [self.tokenized_docs[idx] for idx in top_k_indices]
+        top_k_scores = similarities[top_indices].tolist()
+        return top_k_indices, top_k_scores
     
     def ensure_diversity(self, indices, docs, query):
         """Ensure diversity in retrieved documents"""
