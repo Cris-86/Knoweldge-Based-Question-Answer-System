@@ -100,7 +100,7 @@ class KBQA:
         elif self.retrieverName == 'Hybrid' and self.use_GPU==True:
             bm25_indices, bm25_scores = self.bm25_retriever.retrieve_single_question(tokenized_question)
             w2v_indices, w2v_scores = self.w2v_retriever.retrieve_single_question(tokenized_question)
-            colbert_indices, colbert_scores = self.ColBERT_retriever.retrieve_single_question(tokenized_question)
+            colbert_indices, colbert_scores = self.ColBERT_retriever.retrieve_single_question(question)
             bm25_scores = self.score_regularization(bm25_scores)
             w2v_scores = self.score_regularization(w2v_scores)
             colbert_scores = self.score_regularization(colbert_scores)
@@ -200,10 +200,27 @@ class KBQA:
                     question = data['question']
                     tokenized_question = get_data.preprocess_document(question)
                     data['tokenized_question'] = tokenized_question
-                    if self.retrieverName == 'Hybrid':
-                        bm25_indices, _ = self.bm25_retriever.retrieve_datasets(data['tokenized_question'])
-                        w2v_indices, _ = self.w2v_retriever.retrieve_datasets(data['tokenized_question'])
-                        best_match_indices = list(dict.fromkeys(bm25_indices + w2v_indices))[:self.top_k]
+                    if self.retrieverName == 'Hybrid' and self.use_GPU==False:
+                        bm25_indices, bm25_scores = self.bm25_retriever.retrieve_datasets(tokenized_question)
+                        w2v_indices, w2v_scores = self.w2v_retriever.retrieve_datasets(tokenized_question)
+                        bm25_scores = self.score_regularization(bm25_scores)
+                        w2v_scores = self.score_regularization(w2v_scores)
+                        sorted_indices, sorted_scores = self.combine_ranking(bm25_indices, bm25_scores, w2v_indices, w2v_scores)
+                        top_indices = sorted_indices
+                        best_match_indices = list(dict.fromkeys(top_indices))
+                       
+                    elif self.retrieverName == 'Hybrid' and self.use_GPU==True:
+                        bm25_indices, bm25_scores = self.bm25_retriever.retrieve_datasets(tokenized_question)
+                        w2v_indices, w2v_scores = self.w2v_retriever.retrieve_datasets(tokenized_question)
+                        colbert_indices, colbert_scores = self.ColBERT_retriever.retrieve_datasets(question)
+                        bm25_scores = self.score_regularization(bm25_scores)
+                        w2v_scores = self.score_regularization(w2v_scores)
+                        colbert_scores = self.score_regularization(colbert_scores)
+                        sorted_indices, sorted_scores = self.combine_ranking(bm25_indices, bm25_scores, w2v_indices, w2v_scores)
+                        final_indices, final_scores = self.combine_ranking(sorted_indices, sorted_scores, colbert_indices, colbert_scores)
+                        top_indices = final_indices
+                        best_match_indices = list(dict.fromkeys(top_indices))
+                    
                     elif self.retrieverName == 'ColBERT':
                         if self.sentence_search:
                             best_match_indices, relevant_sentences = self.retriever.retrieve_with_sentence_search(
@@ -361,8 +378,8 @@ if __name__ == "__main__":
     # Test  dataset Samples
     # kbqa = KBQA(retriever='ColBERT', sentence_search=True)
     # kbqa.refine_sentence_top_k()
- 
-    kbqa = KBQA(retriever='Hybrid')
+
+    kbqa = KBQA(retriever='Hybrid', use_GPU=True)
     kbqa.generate_datasets_answer(dataset_path='./data/val.jsonl', gold_file=True, use_wandb=True)
     # kbqa.refine_temperature()
     # kbqa.generate_datasets_answer(dataset_path='./data/val.jsonl', gold_file=True, use_wandb=False)
