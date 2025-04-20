@@ -88,6 +88,7 @@ def load_datasets(file_path='./data/train.jsonl'):
         for line in tqdm.tqdm(f, desc="Loading datasets"):
             if line.strip():
                 data = json.loads(line)
+                print(data['question'])
                 tokenized_question = preprocess_document(data['question'])
                 datasets.append({
                     'question': data['question'],

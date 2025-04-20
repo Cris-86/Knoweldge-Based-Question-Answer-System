@@ -2,12 +2,17 @@ import generator
 import get_data
 import json
 import os
+
 import tqdm
 import numpy as np
 from bert_score import score
 
+current_script_path = os.path.abspath(__file__)
+script_dir = os.path.dirname(current_script_path)
+data_path = os.path.join(script_dir, "data", "documents.jsonl")
+
 class KBQA:
-    def __init__(self, file_path='./data/documents.jsonl', 
+    def __init__(self, file_path=data_path, 
                  retriever='BM25', 
                  top_k=5, 
                  sentence_search=False,
@@ -17,12 +22,12 @@ class KBQA:
         self.top_k = top_k
         self.sentence_search = sentence_search
         self.file_path = file_path
-
+        '''
         if use_GPU:
             import torch
             if not torch.cuda.is_available():
                 raise RuntimeError("GPU is not available. Please set use_GPU=False.")
-
+        '''
         if retriever=='BM25':
             import BM25
             self.retrieverName = 'BM25'
@@ -100,7 +105,7 @@ class KBQA:
         elif self.retrieverName == 'Hybrid' and self.use_GPU==True:
             bm25_indices, bm25_scores = self.bm25_retriever.retrieve_single_question(tokenized_question)
             w2v_indices, w2v_scores = self.w2v_retriever.retrieve_single_question(tokenized_question)
-            colbert_indices, colbert_scores = self.ColBERT_retriever.retrieve_single_question(tokenized_question)
+            colbert_indices, colbert_scores = self.ColBERT_retriever.retrieve_single_question(question)
             bm25_scores = self.score_regularization(bm25_scores)
             w2v_scores = self.score_regularization(w2v_scores)
             colbert_scores = self.score_regularization(colbert_scores)
@@ -125,8 +130,8 @@ class KBQA:
             top_indices, _ = self.retriever.retrieve_single_question(tokenized_question)
             docs = self.get_docs(top_indices)
             
-        answer = self.generator_model.generate_answer(question, docs)
-        return answer, top_indices
+        answer, summary = self.generator_model.generate_answer(question, docs, return_summary=True)
+        return answer, top_indices, docs, summary
     
     def refine_sentence_top_k(self):
         sentence_top_ks = [1, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 
@@ -200,10 +205,27 @@ class KBQA:
                     question = data['question']
                     tokenized_question = get_data.preprocess_document(question)
                     data['tokenized_question'] = tokenized_question
-                    if self.retrieverName == 'Hybrid':
-                        bm25_indices, _ = self.bm25_retriever.retrieve_datasets(data['tokenized_question'])
-                        w2v_indices, _ = self.w2v_retriever.retrieve_datasets(data['tokenized_question'])
-                        best_match_indices = list(dict.fromkeys(bm25_indices + w2v_indices))[:self.top_k]
+                    if self.retrieverName == 'Hybrid' and self.use_GPU==False:
+                        bm25_indices, bm25_scores = self.bm25_retriever.retrieve_datasets(tokenized_question)
+                        w2v_indices, w2v_scores = self.w2v_retriever.retrieve_datasets(tokenized_question)
+                        bm25_scores = self.score_regularization(bm25_scores)
+                        w2v_scores = self.score_regularization(w2v_scores)
+                        sorted_indices, sorted_scores = self.combine_ranking(bm25_indices, bm25_scores, w2v_indices, w2v_scores)
+                        top_indices = sorted_indices
+                        best_match_indices = list(dict.fromkeys(top_indices))
+                       
+                    elif self.retrieverName == 'Hybrid' and self.use_GPU==True:
+                        bm25_indices, bm25_scores = self.bm25_retriever.retrieve_datasets(tokenized_question)
+                        w2v_indices, w2v_scores = self.w2v_retriever.retrieve_datasets(tokenized_question)
+                        colbert_indices, colbert_scores = self.ColBERT_retriever.retrieve_datasets(question)
+                        bm25_scores = self.score_regularization(bm25_scores)
+                        w2v_scores = self.score_regularization(w2v_scores)
+                        colbert_scores = self.score_regularization(colbert_scores)
+                        sorted_indices, sorted_scores = self.combine_ranking(bm25_indices, bm25_scores, w2v_indices, w2v_scores)
+                        final_indices, final_scores = self.combine_ranking(sorted_indices, sorted_scores, colbert_indices, colbert_scores)
+                        top_indices = final_indices
+                        best_match_indices = list(dict.fromkeys(top_indices))
+                    
                     elif self.retrieverName == 'ColBERT':
                         if self.sentence_search:
                             best_match_indices, relevant_sentences = self.retriever.retrieve_with_sentence_search(
@@ -294,7 +316,7 @@ class KBQA:
         else:
             raise FileNotFoundError(f"Credentials file '{file_path}' not found.")
 
-    def get_docs(self, top_indices, doc_path='./data/documents.jsonl'):
+    def get_docs(self, top_indices, doc_path=data_path):
         with open(doc_path, 'r', encoding='utf-8') as f:
             documents = [json.loads(line) for line in f if line.strip()]
         retrieved_docs = [get_data.preprocess_text(documents[i]['document_text']) for i in top_indices]
@@ -352,6 +374,14 @@ if __name__ == "__main__":
     # source /etc/network_turbo
 
     # Example question
+    kbqa = KBQA(retriever='Word2Vec', use_GPU=True)
+    question = "when did the british first land in north america"
+    answer, top_indices, docs, summary = kbqa.generate_single_question_answer(question)
+    print(f"Top indices: {top_indices}")
+    docs = [doc.replace('\n', ' ') for doc in docs]
+    print(f"Documents: {docs}")
+    print(f"Summary: {summary}")
+    print(f"Answer: {answer}")
     # question = "when did the 1st world war officially end"
     # answer, top_indices = kbqa.generate_single_question_answer(question)
     # print(f"Answer: {answer}")
@@ -361,9 +391,9 @@ if __name__ == "__main__":
     # Test  dataset Samples
     # kbqa = KBQA(retriever='ColBERT', sentence_search=True)
     # kbqa.refine_sentence_top_k()
- 
-    kbqa = KBQA(retriever='Hybrid')
-    kbqa.generate_datasets_answer(dataset_path='./data/val.jsonl', gold_file=True, use_wandb=True)
+
+    # kbqa = KBQA(retriever='Hybrid', use_GPU=True)
+    # kbqa.generate_datasets_answer(dataset_path='./data/val.jsonl', gold_file=True, use_wandb=True)
     # kbqa.refine_temperature()
     # kbqa.generate_datasets_answer(dataset_path='./data/val.jsonl', gold_file=True, use_wandb=False)
 

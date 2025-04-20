@@ -112,7 +112,6 @@ class ColBERT_KBQA:
 
     def build_indexer(self, checkpoint='colbert-ir/colbertv2.0'):
         if not os.path.exists(self.INDEX_NAME):
-            print(f"Building ColBERT index: {self.INDEX_NAME}")
             if self._doc_texts is None:
                 self._load_documents()
                 
@@ -121,7 +120,7 @@ class ColBERT_KBQA:
                 indexer = Indexer(checkpoint=checkpoint, config=config)
                 indexer.index(name=self.INDEX_NAME, collection=self.doc_texts, overwrite=True)
         
-        print(f"Loading ColBERT searcher from {self.INDEX_NAME}")
+        # print(f"Loading ColBERT searcher from {self.INDEX_NAME}")
         with Run().context(RunConfig(experiment='rag_system')):
             self._searcher = Searcher(
                 index=self.INDEX_NAME,
