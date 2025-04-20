@@ -5,7 +5,7 @@ The code is implemented in **Python** and UI is implemented in **streamlit**
 The overall workflow is as follows:
 
 <p align="center"> 
-    <img src="img\workflow.png", width="70%">
+    <img src="img\workflow.png", width="50%">
 </p> 
 
 ## Requirements
