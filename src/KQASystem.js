@@ -54,8 +54,9 @@ function KQASystem() {
           <select value={algorithm} onChange={handleAlgorithmChange} style={{ marginLeft: '10px', padding: '5px' }}>
             <option value="Word2Vec">Word2Vec</option>
             <option value="BM25">BM25</option>
-            <option value="ColBert">ColBert</option>
-            <option value="Hybrid">Hybrid</option>
+            <option value="ColBert">ColBert-RequiredGPU</option>
+            <option value="Hybrid-GPU">Hybrid-GPU</option>
+            <option value="Hybrid-NoGPU">Hybrid-NoGPU</option>
           </select>
         </div>
       </form>
