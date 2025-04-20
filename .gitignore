@@ -7,3 +7,4 @@ __pycache__/
 *.pdf
 model/
 experiments/
+sentence_index_cache/
