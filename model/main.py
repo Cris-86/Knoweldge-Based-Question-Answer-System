@@ -2,12 +2,17 @@ import generator
 import get_data
 import json
 import os
+
 import tqdm
 import numpy as np
 from bert_score import score
 
+current_script_path = os.path.abspath(__file__)
+script_dir = os.path.dirname(current_script_path)
+data_path = os.path.join(script_dir, "data", "documents.jsonl")
+
 class KBQA:
-    def __init__(self, file_path='./data/documents.jsonl', 
+    def __init__(self, file_path=data_path, 
                  retriever='BM25', 
                  top_k=5, 
                  sentence_search=False,
@@ -17,12 +22,12 @@ class KBQA:
         self.top_k = top_k
         self.sentence_search = sentence_search
         self.file_path = file_path
-
+        '''
         if use_GPU:
             import torch
             if not torch.cuda.is_available():
                 raise RuntimeError("GPU is not available. Please set use_GPU=False.")
-
+        '''
         if retriever=='BM25':
             import BM25
             self.retrieverName = 'BM25'
@@ -125,8 +130,8 @@ class KBQA:
             top_indices, _ = self.retriever.retrieve_single_question(tokenized_question)
             docs = self.get_docs(top_indices)
             
-        answer = self.generator_model.generate_answer(question, docs)
-        return answer, top_indices
+        answer, summary = self.generator_model.generate_answer(question, docs, return_summary=True)
+        return answer, top_indices, docs, summary
     
     def refine_sentence_top_k(self):
         sentence_top_ks = [1, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 
@@ -311,7 +316,7 @@ class KBQA:
         else:
             raise FileNotFoundError(f"Credentials file '{file_path}' not found.")
 
-    def get_docs(self, top_indices, doc_path='./data/documents.jsonl'):
+    def get_docs(self, top_indices, doc_path=data_path):
         with open(doc_path, 'r', encoding='utf-8') as f:
             documents = [json.loads(line) for line in f if line.strip()]
         retrieved_docs = [get_data.preprocess_text(documents[i]['document_text']) for i in top_indices]
@@ -369,6 +374,14 @@ if __name__ == "__main__":
     # source /etc/network_turbo
 
     # Example question
+    kbqa = KBQA(retriever='Word2Vec', use_GPU=True)
+    question = "when did the british first land in north america"
+    answer, top_indices, docs, summary = kbqa.generate_single_question_answer(question)
+    print(f"Top indices: {top_indices}")
+    docs = [doc.replace('\n', ' ') for doc in docs]
+    print(f"Documents: {docs}")
+    print(f"Summary: {summary}")
+    print(f"Answer: {answer}")
     # question = "when did the 1st world war officially end"
     # answer, top_indices = kbqa.generate_single_question_answer(question)
     # print(f"Answer: {answer}")
@@ -379,8 +392,8 @@ if __name__ == "__main__":
     # kbqa = KBQA(retriever='ColBERT', sentence_search=True)
     # kbqa.refine_sentence_top_k()
 
-    kbqa = KBQA(retriever='Hybrid', use_GPU=True)
-    kbqa.generate_datasets_answer(dataset_path='./data/val.jsonl', gold_file=True, use_wandb=True)
+    # kbqa = KBQA(retriever='Hybrid', use_GPU=True)
+    # kbqa.generate_datasets_answer(dataset_path='./data/val.jsonl', gold_file=True, use_wandb=True)
     # kbqa.refine_temperature()
     # kbqa.generate_datasets_answer(dataset_path='./data/val.jsonl', gold_file=True, use_wandb=False)
 

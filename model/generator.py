@@ -4,8 +4,13 @@ import BM25
 import get_data
 import json
 
+current_script_path = os.path.abspath(__file__)
+script_dir = os.path.dirname(current_script_path)
+credentials_path = os.path.join(script_dir, 'credentials')
+data_path = os.path.join(script_dir, "data", "train.jsonl")
+
 class AnswerGenerator:
-    def __init__(self, file_path='credentials', fine_generation=False):
+    def __init__(self, file_path=credentials_path, fine_generation=False):
         self.fine_generation = fine_generation
         self.get_api_key(file_path)
         self.url = "https://api.siliconflow.cn/v1/chat/completions"
@@ -13,19 +18,19 @@ class AnswerGenerator:
             "Authorization": f"Bearer {self.api_key}",
             "Content-Type": "application/json"
         }        
-        with open("prompt.txt", "r") as f:
+        with open(os.path.join(script_dir, "prompt.txt"), "r") as f:
             self.prompt_template = f.read()
-        with open("prompt_summary.txt", "r") as f:
+        with open(os.path.join(script_dir, "prompt_summary.txt"), "r") as f:
             self.prompt_template_summary = f.read()
     
-    def get_api_key(self, file_path='credentials'):
+    def get_api_key(self, file_path=credentials_path):
         if os.path.exists(file_path):
             with open(file_path, 'r') as f:
                 self.api_key = f.read().strip()
         else:
             raise FileNotFoundError(f"Credentials file '{file_path}' not found.")
 
-    def get_incontext_examples(self, question, train_path='./data/train.jsonl'):
+    def get_incontext_examples(self, question, train_path=data_path):
         if self.fine_generation:
             # need refine
             kbqa = BM25.BM25_KBQA(file_path=train_path, top_k=2, refine_model=False, use_wandb=False)
@@ -48,34 +53,34 @@ class AnswerGenerator:
     def summary_documents(self, question, current_context, temperature=0.7):
         len_context = len(current_context)
         summary = []
-        for i in range(len_context):
-            prompt = self.prompt_template_summary
-            prompt = prompt.replace("{question}", question)
-            prompt = prompt.replace("{context}", current_context[i])
-            payload = {
-                "model": "Qwen/Qwen2-7B-Instruct",
-                "stream": False,
-                "max_tokens": 4096,
-                "temperature": temperature,
+        current_context = "".join(current_context[:len_context])
+        prompt = self.prompt_template_summary
+        prompt = prompt.replace("{question}", question)
+        prompt = prompt.replace("{context}", current_context)
+        payload = {
+            "model": "Qwen/Qwen2-7B-Instruct",
+            "stream": False,
+            "max_tokens": 4096,
+            "temperature": temperature,
 
-                "top_p": 0.9,
-                "n": 1,
-                "messages": [
-                    {
-                        "content": prompt,
-                        "role": "user"
-                    }
-                ]
-            }
-            try:
-                response = requests.request("POST", url=self.url, json=payload, headers=self.headers)
-                summary.append(response.json()['choices'][0]['message']['content'])
-            except Exception as e:
-                print(f"Request failed: {str(e)}")
-                return "[Error] API request failed"
+            "top_p": 0.9,
+            "n": 1,
+            "messages": [
+                {
+                    "content": prompt,
+                    "role": "user"
+                }
+            ]
+        }
+        try:
+            response = requests.request("POST", url=self.url, json=payload, headers=self.headers)
+            summary.append(response.json()['choices'][0]['message']['content'])
+        except Exception as e:
+            print(f"Request failed: {str(e)}")
+            return "[Error] API request failed"
         return summary
 
-    def generate_answer(self, question, current_context, temperature_1=0.7, temperature_2=0.7):
+    def generate_answer(self, question, current_context, temperature_1=0.7, temperature_2=0.7, return_summary=False):
         current_context = self.summary_documents(question, current_context, temperature_2)  
         len_context = len(current_context)
         context = "".join(current_context[:len_context])
@@ -98,8 +103,12 @@ class AnswerGenerator:
         }
         try:
             response = requests.request("POST", url=self.url, json=payload, headers=self.headers)
+            if return_summary:
+                return response.json()['choices'][0]['message']['content'], current_context
             return response.json()['choices'][0]['message']['content']
         except Exception as e:
             print(f"Request failed: {str(e)}")
             return "[Error] API request failed"
+
+
 

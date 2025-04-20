@@ -8,8 +8,11 @@ import math
 import pickle
 from scipy.spatial.distance import cdist
 
+current_script_path = os.path.abspath(__file__)
+script_dir = os.path.dirname(current_script_path)
+model_path = os.path.join(script_dir, "model", "Word2Vec.bin")
 class Word2Vec_KBQA:
-    def __init__(self, file_path='./data/documents.jsonl', top_k=5, refine_model=False, use_wandb=False, model_path='./model/Word2Vec.bin'):
+    def __init__(self, file_path='./data/documents.jsonl', top_k=5, refine_model=False, use_wandb=False, model_path=model_path):
         self.model_path = model_path
         self.file_path = file_path
         self.top_k = top_k
