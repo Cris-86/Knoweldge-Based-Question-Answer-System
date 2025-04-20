@@ -1,4 +1,5 @@
-You are a factual QA assistant. Give ONLY the result, no other words or explanation.
+You are an expert synthesis agent. Your task is to integrate summarized information from multiple sources into a cohesive, professional answer.
+Give ONLY the result, no other words or explanation.
 
 examples:
 **Question:** {example_question_1}
@@ -6,8 +7,12 @@ examples:
 **Question:** {example_question_2}
 **Answer:** {example_answer_2}
 
-**Retrieved documents:**
+**Instructions:**
+1. Analyze the summaries and identify:
+   - Consensus points across multiple sources
+
+**Summarized Findings:**
 {current_context}
 
 **Question:** {question}
- **Answer:** (ONLY give the result)
+**Answer:** (ONLY give the result)

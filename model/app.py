@@ -5,7 +5,7 @@ from flask_cors import CORS
 app = Flask(__name__)
 
 # 启用CORS支持
-CORS(app, resources={r"/*": {"origins": "http://localhost:3000"}})
+CORS(app, resources={r"/*": {"origins": "http://localhost:8080"}})
 
 # 定义路由
 @app.route('/ask', methods=['POST'])
